@@ -97,18 +97,18 @@ def handle_mention(event, say, context):
         source = "SerpAPI（汎用検索）"
 
     response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {
-                "role": "system",
-                "content": "あなたはChatGPTとして、親しみやすく、丁寧でプロフェッショナルな口調でユーザーに回答します。"
-            },
-            {
-                "role": "user",
-                "content": f"以下の検索結果をもとに、ユーザーの質問に分かりやすく丁寧に答えてください：\n\n{search_result}"
-            }
-        ]
-    )
+    model="gpt-4o",
+    messages=[
+        {
+            "role": "system",
+            "content": "あなたはChatGPTとして、親しみやすく、丁寧でプロフェッショナルな口調でユーザーに回答します。"
+        },
+        {
+            "role": "user",
+            "content": f"以下の検索結果をもとに、ユーザーの質問に分かりやすく丁寧に答えてください：\n\n{search_result}"
+        }
+    ]
+)
 
     say(
         text=f"🔍 使用検索エンジン: *{source}*\n\n{response.choices[0].message.content}",
