@@ -124,7 +124,11 @@ def handle_app_mention(event, say):
     search_text = search_serpapi(search_query) + "\n" + search_google_cse(search_query)
 
     gpt_messages = [
-        {"role": "system", "content": "あなたはSlackのAI税理士アシスタントです。以下の質問とファイル内容、検索結果をもとに、実務的かつ丁寧に構成された回答をしてください。Slackでは *太字* や箇条書きを活用してください。"},
+        {"role": "system", "content": (
+            "あなたはSlackのAI税理士アシスタントです。以下の質問とファイル内容、検索結果をもとに、実務的かつ丁寧に構成された回答をしてください。"
+            "必ず検索結果を反映した形で回答を作成し、検索内容を無視したり省略したりしないでください。"
+            "Slackでは *太字* や箇条書きを活用してください。"
+        )},
         {"role": "user", "content": f"質問内容：{user_input}\n\n添付資料の内容：{file_text[:3000]}\n\n検索結果：{search_text}"}
     ]
 
