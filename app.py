@@ -53,15 +53,25 @@ def handle_mention(event, say, context):
 
     user_query = messages[-1]["text"]
 
+    # GPTに検索クエリを生成してもらう
+    query_gen = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "あなたはユーザーの質問を検索に適した短いキーワードに変換するアシスタントです。"},
+            {"role": "user", "content": f"次の質問に最適な検索キーワードを生成してください：\n{user_query}"}
+        ]
+    )
+    search_query = query_gen.choices[0].message.content.strip()
+
     # SerpAPI + Google CSE で検索
-    serp_result = search_serpapi(user_query)
-    cse_result = search_google_cse(user_query)
+    serp_result = search_serpapi(search_query)
+    cse_result = search_google_cse(search_query)
     combined_result = serp_result + "\n" + cse_result
 
-    # GPT最終回答
+    # GPTで検索結果を整形して回答
     gpt_messages = [
-        {"role": "system", "content": "あなたはSlack上で質問に答える、親しみやすく丁寧でプロフェッショナルなAIです。"},
-        {"role": "user", "content": f"以下の検索結果を参考に、Slackでの質問に対してわかりやすく答えてください：\n{combined_result}"}
+        {"role": "system", "content": "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。検索結果をもとに、Slack上で親しみやすく、丁寧かつプロフェッショナルに質問に回答してください。"},
+        {"role": "user", "content": f"以下の検索結果を参考にして、質問に対して正確かつ丁寧にわかりやすく答えてください：\n{combined_result}"}
     ]
     answer = client.chat.completions.create(
         model="gpt-4o",
