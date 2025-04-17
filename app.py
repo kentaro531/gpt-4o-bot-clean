@@ -60,7 +60,7 @@ def handle_mention(event, say, context):
 
     # GPTに検索クエリを生成してもらう
     query_gen = client.chat.completions.create(
-        model="gpt-4.1",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "あなたはユーザーの質問を検索に適した短いキーワードに変換するアシスタントです。"},
             {"role": "user", "content": user_query}
@@ -79,7 +79,7 @@ def handle_mention(event, say, context):
         {"role": "user", "content": combined_result}
     ]
     refined_result = client.chat.completions.create(
-        model="gpt-4.1",
+        model="gpt-4o",
         messages=restructure_prompt
     ).choices[0].message.content
 
@@ -101,7 +101,7 @@ def handle_mention(event, say, context):
     ]
 
     answer = client.chat.completions.create(
-        model="gpt-4.1",
+        model="gpt-4o",
         messages=gpt_messages
     )
     final_text = answer.choices[0].message.content.replace('**', '*')
