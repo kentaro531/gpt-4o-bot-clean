@@ -27,7 +27,7 @@ def search_serpapi(query):
     }
     res = requests.get(url, params=params).json()
     snippets = [r["snippet"] for r in res.get("organic_results", []) if "snippet" in r]
-    return "\n".join(snippets[:3])
+    return "\n".join(snippets[:5])
 
 # Web検索（Google CSE）
 def search_google_cse(query):
@@ -40,7 +40,7 @@ def search_google_cse(query):
     }
     res = requests.get(url, params=params).json()
     snippets = [item["snippet"] for item in res.get("items", []) if "snippet" in item]
-    return "\n".join(snippets[:3])
+    return "\n".join(snippets[:5])
 
 @app.event("app_mention")
 def handle_mention(event, say, context):
@@ -57,8 +57,8 @@ def handle_mention(event, say, context):
     query_gen = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "あなたはユーザーの質問を検索に適した短いキーワードに変換するアシスタントです。"},
-            {"role": "user", "content": f"次の質問に最適な検索キーワードを生成してください：\n{user_query}"}
+            {"role": "system", "content": "あなたは税務・会計に精通したAIアシスタントです。以下の質問に対して検索クエリとして最も適した短いキーワードを日本語で生成してください。"},
+            {"role": "user", "content": user_query}
         ]
     )
     search_query = query_gen.choices[0].message.content.strip()
@@ -68,13 +68,22 @@ def handle_mention(event, say, context):
     cse_result = search_google_cse(search_query)
     combined_result = serp_result + "\n" + cse_result
 
-    # GPTで検索結果を整形して回答
+    # 検索結果を再構成（要点抽出）
+    restructure_prompt = [
+        {"role": "system", "content": "あなたは検索結果を読み解き、実務に役立つ要点を抜き出す税理士アシスタントです。以下の検索結果から重複を除き、論点を整理してください。"},
+        {"role": "user", "content": combined_result}
+    ]
+    refined_result = client.chat.completions.create(
+        model="gpt-4o",
+        messages=restructure_prompt
+    ).choices[0].message.content
+
+    # 最終回答構築
     gpt_messages = [
         {
             "role": "system",
             "content": (
-                "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。"
-                "Slackでの質問に対し、検索結果やスレッド文脈を参考に、丁寧かつプロフェッショナルに回答してください。\n"
+                "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。Slackでの質問に対し、検索結果やスレッド文脈を参考に、丁寧かつプロフェッショナルに回答してください。\n"
                 "以下のような構成で、分かりやすく長めに構造的な説明を行ってください：\n\n"
                 "1. 【導入】質問の意図を簡単に整理\n"
                 "2. 【要点】答えを先に明確に\n"
@@ -85,9 +94,10 @@ def handle_mention(event, say, context):
         },
         {
             "role": "user",
-            "content": f"以下の検索結果を参考にして、質問に対して正確かつ丁寧にわかりやすく答えてください：\n{combined_result}"
+            "content": f"以下の情報をもとに、質問に構造的に答えてください：\n{refined_result}"
         }
     ]
+
     answer = client.chat.completions.create(
         model="gpt-4o",
         messages=gpt_messages
