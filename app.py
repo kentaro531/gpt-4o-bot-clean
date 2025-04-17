@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 import openai
 import requests
@@ -41,6 +42,11 @@ def search_google_cse(query):
     res = requests.get(url, params=params).json()
     snippets = [item["snippet"] for item in res.get("items", []) if "snippet" in item]
     return "\n".join(snippets[:5])
+
+# Slack太字形式に修正
+def fix_slack_bold(text):
+    text = text.replace('**', '*')  # 一般の太字変換
+    return re.sub(r'- \*(.+?)\*:', lambda m: f'- *{m.group(1)}*:', text)  # 箇条書き対応
 
 # シンプルなリアルタイム系質問の判定（天気・気温など）
 def is_realtime_query(text):
@@ -86,13 +92,8 @@ def handle_mention(event, say, context):
     # 柔軟な回答構成をGPTに指示
     prompt_text = (
         "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。Slackでの質問に対して、検索結果やスレッド文脈を参考に、"
-        "丁寧かつプロフェッショナルに回答してください。質問が複雑な場合は、以下の構成で説明してください：\n\n"
-        "1. 【導入】質問の意図を簡単に整理\n"
-        "2. 【要点】答えを先に明確に\n"
-        "3. 【理由・根拠】税務・会計の根拠や制度、条文に触れながら説明\n"
-        "4. 【補足】実務上の注意点や現場での対処法\n\n"
-        "ただし、質問がシンプルな場合（例：天気、気温、時間など）は、自然な口調で短く端的に答えてください。"
-        "Slack上では *太字* を使い、改行・箇条書きを活用して見やすくしてください。"
+        "丁寧かつプロフェッショナルに回答してください。質問が複雑な場合は、構造的に説明しても構いませんが、必ずしも固定構造には従わず、"
+        "質問の内容に応じて自然でロジカルな構成で答えてください。Slack上では *太字* を使い、改行・箇条書きを活用して見やすくしてください。"
     )
 
     gpt_messages = [
@@ -104,7 +105,7 @@ def handle_mention(event, say, context):
         model="gpt-4o",
         messages=gpt_messages
     )
-    final_text = answer.choices[0].message.content.replace('**', '*')
+    final_text = fix_slack_bold(answer.choices[0].message.content)
     say(text=final_text, thread_ts=thread_ts)
 
 if __name__ == "__main__":
