@@ -27,8 +27,6 @@ def fix_slack_bold(text):
     text = text.replace('**', '*')
     return re.sub(r'- \*(.+?)\*:', lambda m: f'- *{m.group(1)}*:', text)
 
-# ファイル読み込み関数
-
 def read_pdf(content):
     text = ""
     with pdfplumber.open(io.BytesIO(content)) as pdf:
@@ -51,37 +49,57 @@ def read_image(content):
     image = Image.open(io.BytesIO(content))
     return pytesseract.image_to_string(image, lang='jpn')
 
-@app.event("message")
-def handle_message(event, say):
+def extract_file_text(files):
+    text = ""
+    for file in files:
+        file_url = file['url_private']
+        file_type = file.get('filetype')
+        headers = {"Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}"}
+        response = requests.get(file_url, headers=headers)
+        if response.status_code != 200:
+            continue
+        content = response.content
+        if file_type == "pdf":
+            text += read_pdf(content)
+        elif file_type == "xlsx":
+            text += read_excel(content)
+        elif file_type in ["jpg", "png"]:
+            text += read_image(content)
+        elif file_type == "docx":
+            text += read_word(content)
+    return text
+
+def search_serpapi(query):
+    url = "https://serpapi.com/search"
+    params = {
+        "q": query,
+        "api_key": os.environ["SERPAPI_KEY"],
+        "hl": "ja",
+        "gl": "jp"
+    }
+    res = requests.get(url, params=params).json()
+    snippets = [r["snippet"] for r in res.get("organic_results", []) if "snippet" in r]
+    return "\n".join(snippets[:5])
+
+def search_google_cse(query):
+    url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": os.environ["GOOGLE_API_KEY"],
+        "cx": os.environ["GOOGLE_CSE_CX"],
+        "q": query,
+        "hl": "ja"
+    }
+    res = requests.get(url, params=params).json()
+    snippets = [item["snippet"] for item in res.get("items", []) if "snippet" in item]
+    return "\n".join(snippets[:5])
+
+@app.event("app_mention")
+def handle_app_mention(event, say):
     user_input = event.get("text", "")
-    channel = event.get("channel")
     thread_ts = event.get("thread_ts") or event.get("ts")
-    file_text = ""
+    files = event.get("files", [])
+    file_text = extract_file_text(files) if files else ""
 
-    # 添付ファイル処理
-    if 'files' in event:
-        for file in event['files']:
-            file_url = file['url_private']
-            file_type = file.get('filetype')
-            headers = {"Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}"}
-            response = requests.get(file_url, headers=headers)
-            if response.status_code != 200:
-                say("ファイルのダウンロードに失敗しました。")
-                return
-            content = response.content
-            if file_type == "pdf":
-                file_text = read_pdf(content)
-            elif file_type == "xlsx":
-                file_text = read_excel(content)
-            elif file_type in ["jpg", "png"]:
-                file_text = read_image(content)
-            elif file_type == "docx":
-                file_text = read_word(content)
-            else:
-                say("申し訳ありません、この形式にはまだ対応していません。")
-                return
-
-    # 検索クエリ生成 → Web検索実行
     query_gen = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -90,34 +108,8 @@ def handle_message(event, say):
         ]
     )
     search_query = query_gen.choices[0].message.content.strip()
-
-    def search_serpapi(query):
-        url = "https://serpapi.com/search"
-        params = {
-            "q": query,
-            "api_key": os.environ["SERPAPI_KEY"],
-            "hl": "ja",
-            "gl": "jp"
-        }
-        res = requests.get(url, params=params).json()
-        snippets = [r["snippet"] for r in res.get("organic_results", []) if "snippet" in r]
-        return "\n".join(snippets[:5])
-
-    def search_google_cse(query):
-        url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            "key": os.environ["GOOGLE_API_KEY"],
-            "cx": os.environ["GOOGLE_CSE_CX"],
-            "q": query,
-            "hl": "ja"
-        }
-        res = requests.get(url, params=params).json()
-        snippets = [item["snippet"] for item in res.get("items", []) if "snippet" in item]
-        return "\n".join(snippets[:5])
-
     search_text = search_serpapi(search_query) + "\n" + search_google_cse(search_query)
 
-    # GPTに最終指示
     gpt_messages = [
         {"role": "system", "content": "あなたはSlackのAI税理士アシスタントです。以下の質問とファイル内容、検索結果をもとに、実務的かつ丁寧に構成された回答をしてください。Slackでは *太字* や箇条書きを活用してください。"},
         {"role": "user", "content": f"質問内容：{user_input}\n\n添付資料の内容：{file_text[:3000]}\n\n検索結果：{search_text}"}
