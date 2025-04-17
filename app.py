@@ -77,9 +77,14 @@ def search_serpapi(query):
         "hl": "ja",
         "gl": "jp"
     }
-    res = requests.get(url, params=params).json()
-    snippets = [r["snippet"] for r in res.get("organic_results", []) if "snippet" in r]
-    return "\n".join(snippets[:5])
+    try:
+        res = requests.get(url, params=params, timeout=10)
+        data = res.json()
+        snippets = [r["snippet"] for r in data.get("organic_results", []) if "snippet" in r]
+        return "\n".join(snippets[:5])
+    except Exception as e:
+        print(f"SerpAPI error: {e}")
+        return ""
 
 def search_google_cse(query):
     url = "https://www.googleapis.com/customsearch/v1"
@@ -89,12 +94,20 @@ def search_google_cse(query):
         "q": query,
         "hl": "ja"
     }
-    res = requests.get(url, params=params).json()
-    snippets = [item["snippet"] for item in res.get("items", []) if "snippet" in item]
-    return "\n".join(snippets[:5])
+    try:
+        res = requests.get(url, params=params, timeout=10)
+        data = res.json()
+        snippets = [item["snippet"] for item in data.get("items", []) if "snippet" in item]
+        return "\n".join(snippets[:5])
+    except Exception as e:
+        print(f"Google CSE error: {e}")
+        return ""
 
 @app.event("app_mention")
 def handle_app_mention(event, say):
+    if event.get('subtype') == 'bot_message':
+        return
+
     user_input = event.get("text", "")
     thread_ts = event.get("thread_ts") or event.get("ts")
     files = event.get("files", [])
