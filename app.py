@@ -51,21 +51,11 @@ def handle_mention(event, say, context):
     response = web_client.conversations_replies(channel=channel, ts=thread_ts)
     messages = response.get("messages", [])
 
-    # GPTへ：検索クエリ生成
     user_query = messages[-1]["text"]
-    query_prompt = [
-        {"role": "system", "content": "あなたは検索エンジンに質問を投げるための最適な検索キーワードを生成するアシスタントです。"},
-        {"role": "user", "content": f"以下の質問に最適な検索クエリを生成してください：\n{user_query}"}
-    ]
-    query_response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=query_prompt
-    )
-    search_query = query_response.choices[0].message.content.strip()
 
     # SerpAPI + Google CSE で検索
-    serp_result = search_serpapi(search_query)
-    cse_result = search_google_cse(search_query)
+    serp_result = search_serpapi(user_query)
+    cse_result = search_google_cse(user_query)
     combined_result = serp_result + "\n" + cse_result
 
     # GPT最終回答
