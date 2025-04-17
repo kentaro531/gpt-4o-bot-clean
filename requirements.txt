@@ -2,3 +2,8 @@ slack_bolt
 openai
 python-dotenv
 requests
+pdfplumber
+python-docx
+pandas
+pytesseract
+pillow
