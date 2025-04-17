@@ -42,6 +42,11 @@ def search_google_cse(query):
     snippets = [item["snippet"] for item in res.get("items", []) if "snippet" in item]
     return "\n".join(snippets[:5])
 
+# シンプルなリアルタイム系質問の判定（天気・気温など）
+def is_realtime_query(text):
+    keywords = ["天気", "気温", "今日", "明日", "現在", "ニュース"]
+    return any(kw in text.lower() for kw in keywords)
+
 @app.event("app_mention")
 def handle_mention(event, say, context):
     channel = event["channel"]
@@ -57,13 +62,13 @@ def handle_mention(event, say, context):
     query_gen = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "あなたは税務・会計に精通したAIアシスタントです。以下の質問に対して検索クエリとして最も適した短いキーワードを日本語で生成してください。"},
+            {"role": "system", "content": "あなたはユーザーの質問を検索に適した短いキーワードに変換するアシスタントです。"},
             {"role": "user", "content": user_query}
         ]
     )
     search_query = query_gen.choices[0].message.content.strip()
 
-    # SerpAPI + Google CSE で検索
+    # SerpAPI + Google CSE で検索（常に実施）
     serp_result = search_serpapi(search_query)
     cse_result = search_google_cse(search_query)
     combined_result = serp_result + "\n" + cse_result
@@ -78,31 +83,29 @@ def handle_mention(event, say, context):
         messages=restructure_prompt
     ).choices[0].message.content
 
-    # 最終回答構築
+    # 柔軟な回答構成をGPTに指示
+    prompt_text = (
+        "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。Slackでの質問に対して、検索結果やスレッド文脈を参考に、"
+        "丁寧かつプロフェッショナルに回答してください。質問が複雑な場合は、以下の構成で説明してください：\n\n"
+        "1. 【導入】質問の意図を簡単に整理\n"
+        "2. 【要点】答えを先に明確に\n"
+        "3. 【理由・根拠】税務・会計の根拠や制度、条文に触れながら説明\n"
+        "4. 【補足】実務上の注意点や現場での対処法\n\n"
+        "ただし、質問がシンプルな場合（例：天気、気温、時間など）は、自然な口調で短く端的に答えてください。"
+        "Slack上では *太字* を使い、改行・箇条書きを活用して見やすくしてください。"
+    )
+
     gpt_messages = [
-        {
-            "role": "system",
-            "content": (
-                "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。Slackでの質問に対し、検索結果やスレッド文脈を参考に、丁寧かつプロフェッショナルに回答してください。\n"
-                "以下のような構成で、分かりやすく長めに構造的な説明を行ってください：\n\n"
-                "1. 【導入】質問の意図を簡単に整理\n"
-                "2. 【要点】答えを先に明確に\n"
-                "3. 【理由・根拠】税務・会計の根拠や制度、条文に触れながら説明\n"
-                "4. 【補足】実務上の注意点や現場での対処法\n\n"
-                "また、Slack上で読みやすくなるように改行・箇条書き・太字を活用してください。"
-            )
-        },
-        {
-            "role": "user",
-            "content": f"以下の情報をもとに、質問に構造的に答えてください：\n{refined_result}"
-        }
+        {"role": "system", "content": prompt_text},
+        {"role": "user", "content": f"以下の情報をもとに、質問に最適な形で答えてください：\n{refined_result}"}
     ]
 
     answer = client.chat.completions.create(
         model="gpt-4o",
         messages=gpt_messages
     )
-    say(text=answer.choices[0].message.content, thread_ts=thread_ts)
+    final_text = answer.choices[0].message.content.replace('**', '*')
+    say(text=final_text, thread_ts=thread_ts)
 
 if __name__ == "__main__":
     SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()
