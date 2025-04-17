@@ -70,8 +70,23 @@ def handle_mention(event, say, context):
 
     # GPTで検索結果を整形して回答
     gpt_messages = [
-        {"role": "system", "content": "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。検索結果をもとに、Slack上で親しみやすく、丁寧かつプロフェッショナルに質問に回答してください。"},
-        {"role": "user", "content": f"以下の検索結果を参考にして、質問に対して正確かつ丁寧にわかりやすく答えてください：\n{combined_result}"}
+        {
+            "role": "system",
+            "content": (
+                "あなたはLOOK UP ACCOUNTINGのAI税理士アシスタントです。"
+                "Slackでの質問に対し、検索結果やスレッド文脈を参考に、丁寧かつプロフェッショナルに回答してください。\n"
+                "以下のような構成で、分かりやすく長めに構造的な説明を行ってください：\n\n"
+                "1. 【導入】質問の意図を簡単に整理\n"
+                "2. 【要点】答えを先に明確に\n"
+                "3. 【理由・根拠】税務・会計の根拠や制度、条文に触れながら説明\n"
+                "4. 【補足】実務上の注意点や現場での対処法\n\n"
+                "また、Slack上で読みやすくなるように改行・箇条書き・太字を活用してください。"
+            )
+        },
+        {
+            "role": "user",
+            "content": f"以下の検索結果を参考にして、質問に対して正確かつ丁寧にわかりやすく答えてください：\n{combined_result}"
+        }
     ]
     answer = client.chat.completions.create(
         model="gpt-4o",
